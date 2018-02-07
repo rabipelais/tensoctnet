@@ -20,6 +20,8 @@ def read_data(dir):
             if ext != '.octree':
                 continue
 
+            print(name)
+
             components = basename.split('_')
             train_p = components[0]
             label_name = "-".join(components[1:-4])
@@ -88,7 +90,7 @@ def read_file(filename):
             key_data_bytes = binary_file.read(intsize)
             key_data[i] = int.from_bytes(
                 key_data_bytes, byteorder=endian)
-        # print(key_data)
+        print(key_data)
 
         children_data = np.empty(total_nodes, dtype=int)
         for i in range(total_nodes):
@@ -182,7 +184,7 @@ if __name__ == '__main__':
             'full_layer': _int64_feature(dic['full_layer']),
             'node_num_data': _int64_feature_list(dic['node_num_data']),
             'node_num_accu': _int64_feature_list(dic['node_num_accu']),
-            'key_data': _int64_feature_list(dic['node_num_data']),
+            'key_data': _int64_feature_list(dic['key_data']),
             'children_data': _int64_feature_list(dic['children_data']),
             'data': _float_feature_list(dic['data']),
             'label_data': _int64_feature_list(dic['label_data']),
