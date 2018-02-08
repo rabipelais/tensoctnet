@@ -1,9 +1,19 @@
+from pyevtk.hl import pointsToVTK, imageToVTK
 import tensorflow as tf
 import numpy as np
 import math
+import struct
 import os
 import sys
 from functools import partial
+
+
+def to_point(depth, key):
+    key = np.asscalar(np.uint32(key))
+    k = key.to_bytes(4, byteorder='little')
+    k = bytearray(k)
+    [x, y, z, _] = struct.unpack('B'*len(k), k)
+    return [x, y, z]
 
 
 def parse_function(cats, record):
@@ -76,7 +86,51 @@ def train(dir_name):
     # test_dataset = test_dataset.shuffle(shuffle_size)
     # test_dataset = test_dataset.batch(64)
 
-    print(dataset.output_shapes)
+    # For testing ---------
+    iterator = dataset.make_one_shot_iterator()
+    next_element = iterator.get_next()
+
+    total_nodes = next_element['total_nodes']
+    #total_nodes = tf.Print(total_nodes, [total_nodes], message='total_nodes: ')
+    # total_nodes.eval()
+
+    final_nodes = next_element['final_nodes']
+    #final_nodes = tf.Print(final_nodes, [final_nodes], message='final_nodes: ')
+    # final_nodes.eval()
+
+    depth = next_element['depth']
+    #depth = tf.Print(depth, [depth], message='depth: ')
+    # depth.eval()
+
+    node_num_data = next_element['node_num_data']
+    #node_num_data = tf.Print(
+    #    node_num_data, [node_num_data], message='node_num_data: ', summarize=200)
+    # node_num_data.eval()
+
+    key_data = next_element['key_data']
+    #key_data = tf.Print(
+        key_data, [key_data], message='key_data: ', summarize=200)
+
+    final_keys = tf.slice(key_data, final_nodes, [-1])
+    #final_keys = tf.Print(final_keys, [final_keys], message='final_keys: ')
+    concated = tf.concat([total_nodes, final_nodes, depth,
+                          node_num_data, key_data, final_keys], 0)
+
+    #concated.eval()
+    print("Evaluating")
+
+    depth_, final_keys_ , _ = sess.run([depth, final_keys, concated])
+
+    print("Calculating result")
+    res = [to_point(depth_[0], k) for k in final_keys_]
+    res = list(zip(*res))
+    data = np.full(len(res[0]), 250, dtype=np.int32)
+
+    x = np.array(res[0], dtype=np.int32)
+    y = np.array(res[1], dtype=np.int32)
+    z = np.array(res[2], dtype=np.int32)
+
+    pointsToVTK("./points", x, y, z, data={"data": data})
 
 
 def main():
