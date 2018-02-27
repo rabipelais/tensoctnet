@@ -109,7 +109,7 @@ def train(dir_name):
 
     key_data = next_element['key_data']
     #key_data = tf.Print(
-        key_data, [key_data], message='key_data: ', summarize=200)
+    #    key_data, [key_data], message='key_data: ', summarize=200)
 
     final_keys = tf.slice(key_data, final_nodes, [-1])
     #final_keys = tf.Print(final_keys, [final_keys], message='final_keys: ')
@@ -119,7 +119,7 @@ def train(dir_name):
     #concated.eval()
     print("Evaluating")
 
-    depth_, final_keys_ , _ = sess.run([depth, final_keys, concated])
+    depth_, final_keys_, _ = sess.run([depth, final_keys, concated])
 
     print("Calculating result")
     res = [to_point(depth_[0], k) for k in final_keys_]

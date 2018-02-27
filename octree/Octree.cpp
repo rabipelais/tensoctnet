@@ -168,6 +168,9 @@ bool Octree::save(std::string& filename)
 	// write
 	outfile.write((char*)&total_node_num, sizeof(int));
 	outfile.write((char*)&final_node_num, sizeof(int));
+
+	std::cout << total_node_num << std::endl << final_node_num << std::endl;
+
 	outfile.write((char*)&depth_, sizeof(int));
 	outfile.write((char*)&full_layer_, sizeof(int));
 	outfile.write((char*)node_num.data(), sizeof(int)*(depth_ + 1));
