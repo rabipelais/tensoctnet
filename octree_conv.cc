@@ -184,3 +184,91 @@ class OctreeConvOp : public BinaryOp<T> {
 
   TF_DISALLOW_COPY_AND_ASSIGN(Conv2DOp);
 };
+
+void init_neigh_index()
+{
+	// ni for kernel_size=3
+	vector<int> shape{ 216 };
+	ni_[3].reset(new Blob<int>(shape));
+	int* ni3 = ni_[3]->mutable_cpu_data();
+	int id = 0;
+	for (int i = 0; i < 2; ++i)
+	{
+		for (int j = 0; j < 2; ++j)
+		{
+			for (int k = 0; k < 2; ++k)
+			{
+				for (int x = 0; x < 3; ++x)
+				{
+					for (int y = 0; y < 3; ++y)
+					{
+						for (int z = 0; z < 3; ++z)
+						{
+							ni3[id++] = (x + i << 4) | (y + j << 2) | z + k;
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// ni for kernel_size=2
+	shape[0] = 64;
+	ni_[2].reset(new Blob<int>(shape));
+	int* ni2 = ni_[2]->mutable_cpu_data();
+	const int arr[] = { 13, 14, 16, 17, 22, 23, 25, 26 };
+	for (int i = 0; i < 8; ++i)
+	{
+		for (int j = 0; j < 8; ++j)
+		{
+			ni2[i * 8 + j] = ni3[i * 27 + arr[j]];
+		}
+	}
+
+	// ni for kernel_size=1
+	shape[0] = 8;
+	ni_[1].reset(new Blob<int>(shape));
+	int* ni1 = ni_[1]->mutable_cpu_data();
+	for (int i = 0; i < 8; ++i)
+	{
+		ni1[i] = ni3[i * 27 + 13];
+	}
+
+
+	// init the array parent & displacement
+	id = 0;
+	int tmp[64];
+	shape[0] = 64;
+	displacement_.Reshape(shape);
+	int* dis_ptr = displacement_.mutable_cpu_data();
+	for (int x = 1; x < 5; ++x)
+	{
+		for (int y = 1; y < 5; ++y)
+		{
+			for (int z = 1; z < 5; ++z)
+			{
+				int x1 = x / 2;
+				int xb = x % 2;
+				int y1 = y / 2;
+				int yb = y % 2;
+				int z1 = z / 2;
+				int zb = z % 2;
+
+				tmp[id] = x1 * 9 + y1 * 3 + z1;
+				dis_ptr[id] = (xb << 2) | (yb << 1) | zb;
+				id++;
+			}
+		}
+	}
+
+	shape[0] = 512;
+	parent_.Reshape(shape);
+	int* parent_ptr = parent_.mutable_cpu_data();
+	for (int i = 0; i < 8; ++i)
+	{
+		for (int j = 0; j < 64; ++j)
+		{
+			parent_ptr[i * 64 + j] = ni3[i * 27 + tmp[j]];
+		}
+	}
+}
