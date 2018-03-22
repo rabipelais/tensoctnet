@@ -91,46 +91,65 @@ def train(dir_name):
     next_element = iterator.get_next()
 
     total_nodes = next_element['total_nodes']
-    #total_nodes = tf.Print(total_nodes, [total_nodes], message='total_nodes: ')
+    total_nodes = tf.Print(total_nodes, [total_nodes], message='\ntotal_nodes: ')
     # total_nodes.eval()
 
     final_nodes = next_element['final_nodes']
-    #final_nodes = tf.Print(final_nodes, [final_nodes], message='final_nodes: ')
+    final_nodes = tf.Print(final_nodes, [final_nodes], message='\nfinal_nodes: ')
     # final_nodes.eval()
 
     depth = next_element['depth']
-    #depth = tf.Print(depth, [depth], message='depth: ')
+    depth = tf.Print(depth, [depth], message='\ndepth: ')
     # depth.eval()
 
+
     node_num_data = next_element['node_num_data']
-    #node_num_data = tf.Print(
-    #    node_num_data, [node_num_data], message='node_num_data: ', summarize=200)
+    node_num_data = tf.Print(
+        node_num_data, [node_num_data], message='\nnode_num_data: ', summarize=200)
     # node_num_data.eval()
 
+    node_num_accu = next_element['node_num_accu']
+    node_num_accu = tf.Print(
+        node_num_accu, [node_num_accu], message='\nnode_num_accu: ', summarize=200)
+
     key_data = next_element['key_data']
+    key_data_shape = tf.shape(key_data)
     #key_data = tf.Print(
     #    key_data, [key_data], message='key_data: ', summarize=200)
 
     final_keys = tf.slice(key_data, final_nodes, [-1])
     #final_keys = tf.Print(final_keys, [final_keys], message='final_keys: ')
+    final_keys_shape = tf.shape(final_keys)
+
+    data = next_element['data']
+    data_shape = tf.shape(data)
+
+    children_data = next_element['children_data']
+    children_data_shape = tf.shape(children_data)
+
     concated = tf.concat([total_nodes, final_nodes, depth,
-                          node_num_data, key_data, final_keys], 0)
+                          node_num_data, node_num_accu], 0)
 
     #concated.eval()
     print("Evaluating")
 
-    depth_, final_keys_, _ = sess.run([depth, final_keys, concated])
+    #depth_, final_keys_, _ = sess.run([depth, final_keys, concated])
+    r, s, d, c, _ = sess.run([final_keys_shape, key_data_shape, data_shape, children_data_shape, concated])
+    print("final_keys: ", r)
+    print("key_data: ", s)
+    print("data: ", d)
+    print("children data: ", c)
 
     print("Calculating result")
-    res = [to_point(depth_[0], k) for k in final_keys_]
-    res = list(zip(*res))
-    data = np.full(len(res[0]), 250, dtype=np.int32)
+    # res = [to_point(depth_[0], k) for k in final_keys_]
+    # res = list(zip(*res))
+    # data = np.full(len(res[0]), 250, dtype=np.int32)
 
-    x = np.array(res[0], dtype=np.int32)
-    y = np.array(res[1], dtype=np.int32)
-    z = np.array(res[2], dtype=np.int32)
+    # x = np.array(res[0], dtype=np.int32)
+    # y = np.array(res[1], dtype=np.int32)
+    # z = np.array(res[2], dtype=np.int32)
 
-    pointsToVTK("./points", x, y, z, data={"data": data})
+    # pointsToVTK("./points", x, y, z, data={"data": data})
 
 
 def main():
