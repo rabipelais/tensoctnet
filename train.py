@@ -14,6 +14,9 @@ octree_conv = octree_conv_module.octree_conv
 octree_pooling_module = tf.load_op_library('./octree_pooling.so')
 octree_pooling = octree_pooling_module.octree_pooling
 
+octree_full_layer_module = tf.load_op_library('./octree_full_layer.so')
+octree_full_layer = octree_full_layer_module.octree_full_layer
+
 def to_point(depth, key):
     key = np.asscalar(np.uint32(key))
     k = key.to_bytes(4, byteorder='little')
@@ -141,6 +144,8 @@ def train(dir_name):
     result = octree_conv(data, W, final_nodes, key_data, children_data, node_num_data, depth, [1])
 
     result = octree_pooling(result, final_nodes, key_data, children_data, node_num_data, depth)
+
+    result = octree_full_layer(result, final_nodes, key_data, children_data, node_num_data, depth -1)
     # result = tf.Print(result, [result], message='result: ', summarize=500)
     result_shape = tf.shape(result)
 
