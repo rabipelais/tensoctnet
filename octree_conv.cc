@@ -1,6 +1,10 @@
 #include "tensorflow/core/framework/op_kernel.h"
+#include <vector>
+#include <unordered_map>
 
 using namespace tensorflow;
+
+void calc_neigh_cpu(std::vector<int> &neigh, const int depth, const int batch_size);
 
 REGISTER_OP("OctreeConv")
     .Input("input: T")
@@ -96,30 +100,35 @@ class OctreeConvOp : public OpKernel {
 		// Precalculate some neighbourhood info for 3-kernels
 		int ni3[216];
 		int id = 0;
-		for (int i = 0; i < 2; ++i) {
-			for (int j = 0; j < 2; ++j) {
-				for (int k = 0; k < 2; ++k) {
-					for (int x = 0; x < 3; ++x) {
-						for (int y = 0; y < 3; ++y) {
-							for (int z = 0; z < 3; ++z) {
+		for (int i = 0; i < 2; ++i)
+			for (int j = 0; j < 2; ++j)
+				for (int k = 0; k < 2; ++k)
+					for (int x = 0; x < 3; ++x)
+						for (int y = 0; y < 3; ++y)
+							for (int z = 0; z < 3; ++z)
 								ni3[id++] = (x + i << 4) | (y + j << 2) | z + k;
+
+		// Voxels neighbours
+		std::vector<int> neigh((1 << 3 * current_depth) * 8);
+		calc_neigh_cpu(neigh, current_depth, 1);
 
 		// octree2col
 		const int octree_h = current_depth << 3 * (stride - 1); // = `div` 8
 		const int kernel_size = kernel_tensor.dim_size(0) * kernel_tensor.dim_size(1) * kernel_tensor.dim_size(2); // only tested for 3 * 3 * 3, should probably check for this
 
 
+		float data_col [99999999999999]; //TODO!!!!!!
 		for(int c = 0; c < in_depth; ++c) {
 			for(int k = 0; k < kernel_size; ++k) {
 				for(int h = 0; h < current_depth; ++h) {
 
 					const int index = stride == 2 ? (h << 6) + ni3[k] :
-						(h >> 3 << 6) + ni3[(h % 8) * kernel + k];
+						(h >> 3 << 6) + ni3[(h % 8) * kernel_size + k];
 
-					const int p = (index);
+					const int p = neigh[index];
 
-					data_col[(c*kernel + k)*height + h] = p == -1 ?
-						Dtype(0) : data_octree[c*octree_h + p];
+					data_col[(c*kernel_size + k)*current_depth + h] = p == -1 ?
+						0 : input(c*octree_h + p);
 				}
 			}
 		}
@@ -135,7 +144,7 @@ REGISTER_KERNEL_BUILDER(
     OctreeConvOp<float>);
 
 
-void calc_neigh_cpu(std::vector<int> neigh, const int depth, const int batch_size)
+void calc_neigh_cpu(std::vector<int> &neigh, const int depth, const int batch_size)
 {
 	unsigned node_num = 1 << 3 * depth;
 	const unsigned  bound = 1 << depth;
@@ -188,51 +197,51 @@ void calc_neigh_cpu(std::vector<int> neigh, const int depth, const int batch_siz
 }
 
 
-// Fast version with hash map
-void calc_neighbor(int* neigh, const unsigned* key, const int node_num)
-	{
-		typedef unsigned char ubyte;
+// // Fast version with hash map
+// void calc_neighbor(int* neigh, const unsigned* key, const int node_num)
+// 	{
+// 		typedef unsigned char ubyte;
 
-		// build hash table
-		vector<std::pair<unsigned, int> > entries(node_num);
-		for (int id = 0; id < node_num; ++id)
-		{	// ignore the root node
-			entries[id] = std::make_pair(key[id], id + displacement);
-		}
-		std::unordered_map<unsigned, int> hash_table(entries.begin(), entries.end());
+// 		// build hash table
+// 		vector<std::pair<unsigned, int> > entries(node_num);
+// 		for (int id = 0; id < node_num; ++id)
+// 		{	// ignore the root node
+// 			entries[id] = std::make_pair(key[id], id + displacement);
+// 		}
+// 		std::unordered_map<unsigned, int> hash_table(entries.begin(), entries.end());
 
-		// calc neighborhood
-		for (int id = 0; id < node_num; id += 8)
-		{
-			// the neighborhood volume
-			int* ngh = neigh + id * 8;
-			const ubyte* k0 = (const ubyte*)(key + id);
-			// currently the maximize octree depth is 8
-			ubyte k1[4] = { 0, 0, 0, k0[3] };
-			const ubyte bound = (1 << k0[3]) - 2;
-			for (ubyte x = 0; x < 4; ++x)
-			{
-				k1[0] = k0[0] + x - 1;
-				for (ubyte y = 0; y < 4; ++y)
-				{
-					k1[1] = k0[1] + y - 1;
-					for (ubyte z = 0; z < 4; ++z)
-					{
-						k1[2] = k0[2] + z - 1;
+// 		// calc neighborhood
+// 		for (int id = 0; id < node_num; id += 8)
+// 		{
+// 			// the neighborhood volume
+// 			int* ngh = neigh + id * 8;
+// 			const ubyte* k0 = (const ubyte*)(key + id);
+// 			// currently the maximize octree depth is 8
+// 			ubyte k1[4] = { 0, 0, 0, k0[3] };
+// 			const ubyte bound = (1 << k0[3]) - 2;
+// 			for (ubyte x = 0; x < 4; ++x)
+// 			{
+// 				k1[0] = k0[0] + x - 1;
+// 				for (ubyte y = 0; y < 4; ++y)
+// 				{
+// 					k1[1] = k0[1] + y - 1;
+// 					for (ubyte z = 0; z < 4; ++z)
+// 					{
+// 						k1[2] = k0[2] + z - 1;
 
-						// find
-						unsigned* k2 = reinterpret_cast<unsigned*>(k1);
-						auto rst = hash_table.find(*k2);
-						ubyte i = (x << 4) | (y << 2) | z;
-						if (rst != hash_table.end())
-						{
-							ngh[i] = rst->second;
-						}
-						else {
-							ngh[i] = -1;
-						}
-					}
-				}
-			}
-		}
-}
+// 						// find
+// 						unsigned* k2 = reinterpret_cast<unsigned*>(k1);
+// 						auto rst = hash_table.find(*k2);
+// 						ubyte i = (x << 4) | (y << 2) | z;
+// 						if (rst != hash_table.end())
+// 						{
+// 							ngh[i] = rst->second;
+// 						}
+// 						else {
+// 							ngh[i] = -1;
+// 						}
+// 					}
+// 				}
+// 			}
+// 		}
+// }
