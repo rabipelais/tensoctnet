@@ -4,9 +4,6 @@ using namespace tensorflow;
 
 REGISTER_OP("OctreeFullLayer")
     .Input("input: T")
-    .Input("final_nodes: int64")
-    .Input("key_data: int64")
-    .Input("children_data: int64")
     .Input("node_num_data: int64")
     .Input("current_depth: int64")
     .Output("output: T")
@@ -33,20 +30,10 @@ class OctreeFullLayerOp : public OpKernel {
 		// filter's in_depth.
 		const int64 in_depth = input_tensor.dim_size(2);
 
-
-		const Tensor& final_nodes_tensor = context->input(1);
-		auto final_nodes = final_nodes_tensor.flat<int64>()(0);
-
-		const Tensor& children_data_tensor = context->input(3);
-		auto children_data = children_data_tensor.flat<int64>();
-
-		const Tensor& key_data_tensor = context->input(2);
-		auto key_data = key_data_tensor.flat<int64>();
-
-		const Tensor& node_num_data_tensor = context->input(4);
+		const Tensor& node_num_data_tensor = context->input(1);
 		auto node_num_data = node_num_data_tensor.flat<int64>();
 
-		const Tensor& current_depth_tensor = context->input(5);
+		const Tensor& current_depth_tensor = context->input(2);
 		auto current_depth = current_depth_tensor.flat<int64>()(0);
 
 		OP_REQUIRES(context, input_tensor.dim_size(1) == node_num_data(current_depth) * 3,

@@ -145,7 +145,7 @@ def train(dir_name):
 
     result = octree_pooling(result, final_nodes, key_data, children_data, node_num_data, depth)
 
-    result = octree_full_layer(result, final_nodes, key_data, children_data, node_num_data, depth -1)
+    result = octree_full_layer(result, node_num_data, depth -1)
     # result = tf.Print(result, [result], message='result: ', summarize=500)
     result_shape = tf.shape(result)
 
