@@ -91,6 +91,38 @@ class OctreeConvOp : public OpKernel {
 		Tensor* output_tensor = NULL;
 		OP_REQUIRES_OK(context, context->allocate_output(0, output_shape,
                                                      &output_tensor));
+		auto output = output_tensor->flat<T>();
+
+		// Precalculate some neighbourhood info for 3-kernels
+		int ni3[256];
+		int id = 0;
+		for (int i = 0; i < 2; ++i) {
+			for (int j = 0; j < 2; ++j) {
+				for (int k = 0; k < 2; ++k) {
+					for (int x = 0; x < 3; ++x) {
+						for (int y = 0; y < 3; ++y) {
+							for (int z = 0; z < 3; ++z) {
+								ni3[id++] = (x + i << 4) | (y + j << 2) | z + k;
+
+		// octree2col
+		const int octree_h = current_depth << 3 * (stride - 1); // = `div` 8
+		const int kernel_size = kernel_tensor.dim_size(0) * kernel_tensor.dim_size(1) * kernel_tensor.dim_size(2); // only tested for 3 * 3 * 3, should probably check for this
+
+
+		for(int c = 0; c < in_depth; ++c) {
+			for(int k = 0; k < kernel; ++k) {
+				for(int h = 0; h < current_depth; ++h) {
+
+					const int index = stride == 2 ? (h << 6) + ni[k] :
+						(h >> 3 << 6) + ni[(h % 8) * kernel + k];
+
+					const int p = neigh[index];
+
+					data_col[(c*kernel + k)*height + h] = p == -1 ?
+						Dtype(0) : data_octree[c*octree_h + p];
+				}
+			}
+		}
 
 
 	}
