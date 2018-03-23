@@ -7,6 +7,9 @@ import os
 import sys
 from functools import partial
 
+# Own ops
+octree_conv_module = tf.load_op_library('./octree_conv.so')
+octree_conv = octree_conv_module.octree_conv
 
 def to_point(depth, key):
     key = np.asscalar(np.uint32(key))
@@ -15,6 +18,10 @@ def to_point(depth, key):
     [x, y, z, _] = struct.unpack('B'*len(k), k)
     return [x, y, z]
 
+def weight_variable(shape):
+    """weight_variable generates a weight variable of a given shape."""
+    initial = tf.truncated_normal(shape, stddev=0.1)
+    return tf.Variable(initial, dtype=tf.float32)
 
 def parse_function(cats, record):
     features = {
@@ -78,7 +85,7 @@ def train(dir_name):
 
     dataset = tf.data.TFRecordDataset([training_records])
     dataset = dataset.map(partial(parse_function, num_cats))
-    # dataset = dataset.shuffle(shuffle_size)
+    # dataset = dataset.shuffle(100)
     # dataset = dataset.batch(batch_size)
 
     test_dataset = tf.data.TFRecordDataset([test_records])
@@ -102,7 +109,6 @@ def train(dir_name):
     depth = tf.Print(depth, [depth], message='\ndepth: ')
     # depth.eval()
 
-
     node_num_data = next_element['node_num_data']
     node_num_data = tf.Print(
         node_num_data, [node_num_data], message='\nnode_num_data: ', summarize=200)
@@ -121,11 +127,16 @@ def train(dir_name):
     #final_keys = tf.Print(final_keys, [final_keys], message='final_keys: ')
     final_keys_shape = tf.shape(final_keys)
 
-    data = next_element['data']
+    data = tf.reshape(next_element['data'], [1, -1, 1])
     data_shape = tf.shape(data)
 
     children_data = next_element['children_data']
     children_data_shape = tf.shape(children_data)
+
+    ## CONV OP
+    W = weight_variable([3, 3, 3, 1, 3])
+    result = octree_conv(data, W, final_nodes, key_data, children_data, node_num_data, [4], [3])
+    result_shape = tf.shape(result)
 
     concated = tf.concat([total_nodes, final_nodes, depth,
                           node_num_data, node_num_accu], 0)
@@ -133,12 +144,16 @@ def train(dir_name):
     #concated.eval()
     print("Evaluating")
 
+    tf.global_variables_initializer().run()
+    writer = tf.summary.FileWriter("tf_logs", sess.graph)
+
     #depth_, final_keys_, _ = sess.run([depth, final_keys, concated])
-    r, s, d, c, _ = sess.run([final_keys_shape, key_data_shape, data_shape, children_data_shape, concated])
-    print("final_keys: ", r)
-    print("key_data: ", s)
-    print("data: ", d)
-    print("children data: ", c)
+    res, r, s, d, c, _ = sess.run([result_shape, final_keys_shape, key_data_shape, data_shape, children_data_shape, concated])
+    print("result shape: %s" % res)
+    print("final_keys: %s" % r)
+    print("key_data: %s" % s)
+    print("data: %s" % d)
+    print("children data: %s" % c)
 
     print("Calculating result")
     # res = [to_point(depth_[0], k) for k in final_keys_]
