@@ -136,7 +136,7 @@ class OctreeConvOp : public OpKernel {
 
 		auto data_col_eigen = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>::Map(data_col.data(), out_size, in_depth * kernel_size);
 
-		auto kernel_flat = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>::Map(kernel_tensor.matrix<float>().data(), in_depth * kernel_size, out_depth);
+		auto kernel_flat = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>::Map(kernel_tensor.flat<float>().data(), in_depth * kernel_size, out_depth);
 
 		auto out_eigen = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>::Map(output.data(), out_size, out_depth);
 
