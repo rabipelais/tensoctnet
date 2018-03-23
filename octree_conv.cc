@@ -117,32 +117,32 @@ class OctreeConvOp : public OpKernel {
 		const int kernel_size = kernel_tensor.dim_size(0) * kernel_tensor.dim_size(1) * kernel_tensor.dim_size(2); // only tested for 3 * 3 * 3, should probably check for this
 
 
-		float data_col [99999999999999]; //TODO!!!!!!
+		std::vector<float> data_col(in_depth * kernel_size * out_size);
+
 		for(int c = 0; c < in_depth; ++c) {
 			for(int k = 0; k < kernel_size; ++k) {
-				for(int h = 0; h < current_depth; ++h) {
+				for(int h = 0; h < out_size; ++h) {
 
 					const int index = stride == 2 ? (h << 6) + ni3[k] :
 						(h >> 3 << 6) + ni3[(h % 8) * kernel_size + k];
 
 					const int p = neigh[index];
 
-					data_col[(c*kernel_size + k)*current_depth + h] = p == -1 ?
+					data_col[(c*kernel_size + k)*out_size + h] = p == -1 ?
 						0 : input(c*octree_h + p);
 				}
 			}
 		}
 
+		auto data_col_eigen = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>::Map(data_col.data(), out_size, in_depth * kernel_size);
 
+		auto kernel_flat = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>::Map(kernel_tensor.matrix<float>().data(), in_depth * kernel_size, out_depth);
+
+		auto out_eigen = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>::Map(output.data(), out_size, out_depth);
+
+		out_eigen.noalias() = data_col_eigen * kernel_flat;
 	}
 };
-
-REGISTER_KERNEL_BUILDER(
-    Name("OctreeConv")
-    .Device(DEVICE_CPU)
-    .TypeConstraint<float>("T"),
-    OctreeConvOp<float>);
-
 
 void calc_neigh_cpu(std::vector<int> &neigh, const int depth, const int batch_size)
 {
@@ -245,3 +245,10 @@ void calc_neigh_cpu(std::vector<int> &neigh, const int depth, const int batch_si
 // 			}
 // 		}
 // }
+
+
+REGISTER_KERNEL_BUILDER(
+    Name("OctreeConv")
+    .Device(DEVICE_CPU)
+    .TypeConstraint<float>("T"),
+    OctreeConvOp<float>);
