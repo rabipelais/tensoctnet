@@ -28,6 +28,8 @@ class OctreePoolingOp : public OpKernel {
 		OP_REQUIRES(context, input_tensor.dims() == 3,
 					errors::InvalidArgument("input must be 3-dimensional",
 										   input_tensor.shape().DebugString()));
+
+		const int in_size = input_tensor.dim_size(1);
 		// The last dimension for input is in_depth. It must be the same as the
 		// filter's in_depth.
 		const int64 in_depth = input_tensor.dim_size(2);
@@ -58,6 +60,26 @@ class OctreePoolingOp : public OpKernel {
 
 		// Calculate output shape
 		auto out_size = node_num_data(current_depth - 1) * 3; //TODO check for root
+
+		std::vector<float> output_buffer(in_size >> 3);
+
+		// Do the pooling. Var names correspond to OCNN. They're weird
+		int channel = in_depth;
+		int bottom_h = in_size;
+		int top_h = in_size >> 3;
+		for (int c = 0; c < channel; ++c) {
+			for (int h = 0; h < top_h; ++h) {
+
+				int hb = 8 * h;
+				output_buffer[c * top_h + h] = input(c * bottom_h + hb);
+
+				for (int idx = hb + 1; idx < hb + 8; ++idx) {
+					if (input(c * bottom_h + idx) > output_buffer[c * top_h + h]) {
+						output_buffer[c * top_h + h] = input(c * bottom_h + idx);
+					}
+				}
+			}
+		}
 
 		TensorShape output_shape;
 		output_shape.AddDim(input_tensor.dim_size(0));
