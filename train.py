@@ -135,7 +135,7 @@ def train(dir_name):
 
     ## CONV OP
     W = weight_variable([3, 3, 3, 1, 3])
-    result = octree_conv(data, W, final_nodes, key_data, children_data, node_num_data, [4], [3])
+    result = octree_conv(data, W, final_nodes, key_data, children_data, node_num_data, depth, [1])
     result_shape = tf.shape(result)
 
     concated = tf.concat([total_nodes, final_nodes, depth,

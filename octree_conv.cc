@@ -89,7 +89,7 @@ class OctreeConvOp : public OpKernel {
 		output_shape.AddDim(out_depth);
 
 		Tensor* output_tensor = NULL;
-		OP_REQUIRES_OK(context, context->allocate_output(0, input_tensor.shape(),
+		OP_REQUIRES_OK(context, context->allocate_output(0, output_shape,
                                                      &output_tensor));
 
 
