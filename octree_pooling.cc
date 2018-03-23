@@ -42,7 +42,7 @@ class OctreePoolingOp : public OpKernel {
 		auto final_nodes = final_nodes_tensor.flat<int64>()(0);
 
 		const Tensor& children_data_tensor = context->input(3);
-		auto children_data = children_data_tensor.flat<int64>();
+		auto labels = children_data_tensor.flat<int64>();
 
 		const Tensor& key_data_tensor = context->input(2);
 		auto key_data = key_data_tensor.flat<int64>();
@@ -61,12 +61,14 @@ class OctreePoolingOp : public OpKernel {
 		// Calculate output shape
 		auto out_size = node_num_data(current_depth - 1) * 3; //TODO check for root
 
-		std::vector<float> output_buffer(in_size >> 3);
 
 		// Do the pooling. Var names correspond to OCNN. They're weird
 		int channel = in_depth;
 		int bottom_h = in_size;
 		int top_h = in_size >> 3;
+
+		std::vector<float> output_buffer(channel * in_size >> 3);
+
 		for (int c = 0; c < channel; ++c) {
 			for (int h = 0; h < top_h; ++h) {
 
@@ -89,7 +91,24 @@ class OctreePoolingOp : public OpKernel {
 		Tensor* output_tensor = NULL;
 		OP_REQUIRES_OK(context, context->allocate_output(0, output_shape,
                                                      &output_tensor));
+		auto output = output_tensor->flat<float>();
 
+		//Recreate accum for nodes (why not just pass it?)
+		std::vector<int> nodes_acc(node_num_data.size() + 1);
+		nodes_acc[0] = 0;
+		for(int i = 0; i < node_num_data.size(); i++) {
+			nodes_acc[i+1] = nodes_acc[i] + node_num_data(i);
+		}
+
+		// Padding to account for empty nodes.
+		for (int c = 0; c < channel; ++c)
+		{
+			for (int h = 0; h < out_size; ++h)
+			{
+				const long GUARD = 4294967295;
+				output(c*out_size + h) = labels(nodes_acc[current_depth - 1] + h) == GUARD ? 0 : output_buffer[c*top_h + labels(nodes_acc[current_depth - 1] + h)];
+			}
+		}
 
 	}
 };
