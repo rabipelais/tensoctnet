@@ -38,19 +38,19 @@ class OctreePoolingOp : public OpKernel {
 		const int out_depth = in_depth;
 
 
-		const Tensor& final_nodes_tensor = context->input(2);
+		const Tensor& final_nodes_tensor = context->input(1);
 		auto final_nodes = final_nodes_tensor.flat<int64>()(0);
 
-		const Tensor& children_data_tensor = context->input(4);
+		const Tensor& children_data_tensor = context->input(3);
 		auto children_data = children_data_tensor.flat<int64>();
 
-		const Tensor& key_data_tensor = context->input(3);
+		const Tensor& key_data_tensor = context->input(2);
 		auto key_data = key_data_tensor.flat<int64>();
 
-		const Tensor& node_num_data_tensor = context->input(5);
+		const Tensor& node_num_data_tensor = context->input(4);
 		auto node_num_data = node_num_data_tensor.flat<int64>();
 
-		const Tensor& current_depth_tensor = context->input(6);
+		const Tensor& current_depth_tensor = context->input(5);
 		auto current_depth = current_depth_tensor.flat<int64>()(0);
 
 		OP_REQUIRES(context, input_tensor.dim_size(1) == node_num_data(current_depth) * 3,

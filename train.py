@@ -11,6 +11,9 @@ from functools import partial
 octree_conv_module = tf.load_op_library('./octree_conv.so')
 octree_conv = octree_conv_module.octree_conv
 
+octree_pooling_module = tf.load_op_library('./octree_pooling.so')
+octree_pooling = octree_pooling_module.octree_pooling
+
 def to_point(depth, key):
     key = np.asscalar(np.uint32(key))
     k = key.to_bytes(4, byteorder='little')
@@ -136,7 +139,9 @@ def train(dir_name):
     ## CONV OP
     W = weight_variable([3, 3, 3, 1, 3])
     result = octree_conv(data, W, final_nodes, key_data, children_data, node_num_data, depth, [1])
-    result = tf.Print(result, [result], message='result: ', summarize=500)
+
+    result = octree_pooling(result, final_nodes, key_data, children_data, node_num_data, depth)
+    # result = tf.Print(result, [result], message='result: ', summarize=500)
     result_shape = tf.shape(result)
 
     concated = tf.concat([total_nodes, final_nodes, depth,
