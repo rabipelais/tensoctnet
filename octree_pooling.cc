@@ -4,7 +4,6 @@ using namespace tensorflow;
 
 REGISTER_OP("OctreePooling")
     .Input("input: T")
-    .Input("kernel: T")
     .Input("final_nodes: int64")
     .Input("key_data: int64")
     .Input("children_data: int64")
@@ -26,29 +25,15 @@ class OctreePoolingOp : public OpKernel {
 		const Tensor& input_tensor = context->input(0);
 		auto input = input_tensor.flat<T>();
 
-		// Input filter is of the following dimensions:
-		// [ filter_x, filter_y, filter_z, in_depth, out_depth]
-		const Tensor& kernel_tensor = context->input(1);
-		auto kernel = kernel_tensor.flat<T>();
-
 		OP_REQUIRES(context, input_tensor.dims() == 3,
 					errors::InvalidArgument("input must be 3-dimensional",
 										   input_tensor.shape().DebugString()));
-		OP_REQUIRES(context, kernel_tensor.dims() == 5,
-					errors::InvalidArgument("kernel must be 5-dimensional: ",
-										   kernel_tensor.shape().DebugString()));
-
 		// The last dimension for input is in_depth. It must be the same as the
 		// filter's in_depth.
 		const int64 in_depth = input_tensor.dim_size(2);
 
-		OP_REQUIRES(context, in_depth == kernel_tensor.dim_size(3),
-					errors::InvalidArgument(
-						"input and kernel must have the same depth: ", in_depth,
-						" vs ", kernel_tensor.dim_size(3)));
-
 		// The last dimension for filter is out_depth.
-		const int out_depth = static_cast<int>(kernel_tensor.dim_size(3));
+		const int out_depth = in_depth;
 
 
 		const Tensor& final_nodes_tensor = context->input(2);
