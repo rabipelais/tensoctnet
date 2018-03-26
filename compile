@@ -8,3 +8,5 @@ g++ -std=c++11 -shared octree_conv.cc  -o octree_conv.so -fPIC ${TF_CFLAGS[@]} $
 g++ -std=c++11 -shared octree_pooling.cc  -o octree_pooling.so -fPIC ${TF_CFLAGS[@]} ${TF_LFLAGS[@]} -O2
 
 g++ -std=c++11 -shared octree_full_layer.cc  -o octree_full_layer.so -fPIC ${TF_CFLAGS[@]} ${TF_LFLAGS[@]} -O2
+
+g++ -std=c++11 -shared octree_full_layer_gradient.cc -o octree_full_layer.so -fPIC ${TF_CFLAGS[@]} ${TF_LFLAGS[@]} -O2
