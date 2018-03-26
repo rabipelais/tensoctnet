@@ -62,8 +62,6 @@ class OctreePoolingGradientOp : public OpKernel {
 						"input (from gradient) data must have node_num_data[current_depth - 1] * 3 entries: ", input_tensor.dim_size(1),
 						" vs ", node_num_data(current_depth - 1) * 3));
 
-		//TODO first de-pad
-
 		// Calculate output shape
 		auto out_size = node_num_data(current_depth) * 3; //TODO check for root
 
@@ -72,6 +70,28 @@ class OctreePoolingGradientOp : public OpKernel {
 		int channel = in_depth; //same as out_depth
 		int bottom_h = out_size;
 		int top_h = out_size >> 3;
+
+		// Recreate accum for nodes (why not just pass it?)
+		// required for the {de-}padding
+		std::vector<int> nodes_acc(node_num_data.size() + 1);
+		nodes_acc[0] = 0;
+		for(int i = 0; i < node_num_data.size(); i++) {
+			nodes_acc[i+1] = nodes_acc[i] + node_num_data(i);
+		}
+
+		// De-pad the input to account for empty nodes
+		std::vector<T> input_buffer(channel * out_size >> 3);
+		// OMG pls kill me. Why isn't this `-1`?
+		// Some int-type size conversion issue?
+		const long GUARD = 4294967295;
+
+		for (int c = 0; c < channel; ++c) {
+			for (int h = 0; h < in_size; ++h) {
+				if(labels(nodes_acc[current_depth - 1] + h) != GUARD) {
+					input_buffer[c*in_size + h] = input(c*top_h + labels(nodes_acc[current_depth - 1] + h));
+				}
+			}
+		}
 
 		TensorShape output_shape;
 		output_shape.AddDim(input_tensor.dim_size(0));
@@ -101,15 +121,8 @@ class OctreePoolingGradientOp : public OpKernel {
 				}
 
 				// Pass gradient to maximal unit
-				output(max_idx_current) = input(c * top_h + h);
+				output(max_idx_current) = input_buffer(c * top_h + h);
 			}
-		}
-
-		//Recreate accum for nodes (why not just pass it?)
-		std::vector<int> nodes_acc(node_num_data.size() + 1);
-		nodes_acc[0] = 0;
-		for(int i = 0; i < node_num_data.size(); i++) {
-			nodes_acc[i+1] = nodes_acc[i] + node_num_data(i);
 		}
 	}
 };

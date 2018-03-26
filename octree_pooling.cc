@@ -67,7 +67,7 @@ class OctreePoolingOp : public OpKernel {
 		int bottom_h = in_size;
 		int top_h = in_size >> 3;
 
-		std::vector<float> output_buffer(channel * in_size >> 3);
+		std::vector<T> output_buffer(channel * in_size >> 3);
 
 		for (int c = 0; c < channel; ++c) {
 			for (int h = 0; h < top_h; ++h) {
@@ -105,6 +105,8 @@ class OctreePoolingOp : public OpKernel {
 		{
 			for (int h = 0; h < out_size; ++h)
 			{
+				// OMG pls kill me. Why isn't this `-1`?
+				// Some int-type size conversion issue?
 				const long GUARD = 4294967295;
 				output(c*out_size + h) = labels(nodes_acc[current_depth - 1] + h) == GUARD ? 0 : output_buffer[c*top_h + labels(nodes_acc[current_depth - 1] + h)];
 			}
