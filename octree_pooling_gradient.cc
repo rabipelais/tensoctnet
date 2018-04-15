@@ -121,7 +121,7 @@ class OctreePoolingGradientOp : public OpKernel {
 				}
 
 				// Pass gradient to maximal unit
-				output(max_idx_current) = input_buffer(c * top_h + h);
+				output(max_idx_current) = input_buffer[c * top_h + h];
 			}
 		}
 	}
