@@ -2,7 +2,9 @@
 #include <string>
 #include <time.h>
 #include <getopt.h>
+#include <sys/stat.h>
 #include "VirtualScanner.h"
+#include <CGAL/assertions_behaviour.h>
 using namespace std;
 
 const int DEFAULT_VIEWS = 6;
@@ -74,17 +76,31 @@ int main(int argc, char* argv[])
 		exit(1);
 	}
 
+	CGAL::set_error_behaviour(CGAL::CONTINUE);
 	//#pragma omp parallel for
 	for (int i = 0; i < allFiles.size(); i++)
 	{
-		clock_t t1 = clock();
-		VirtualScanner scanner;
-		scanner.scanning(allFiles[i], args.viewsNum, args.flipNormals);
-		clock_t t2 = clock();
+	  clock_t t1 = clock();
+		  
+	  // Check if points file already exists
+	  string filename_pc = allFiles[i].substr(0, allFiles[i].rfind('.'));
+	  string name = filename_pc + ".points";
+	  struct stat buffer;
+	  if(stat(name.c_str(), &buffer) == 0) {
+	    string messg = allFiles[i].substr(allFiles[i].rfind('\\') + 1) +
+	      " already exists! Skipping: \n";
+	    cout << messg;
+		    
+	    continue;;
+	  }
+		  
+	  VirtualScanner scanner;
+	  scanner.scanning(allFiles[i], args.viewsNum, args.flipNormals);
+	  clock_t t2 = clock();
 
-		string messg = allFiles[i].substr(allFiles[i].rfind('\\') + 1) +
-			" done! Time: " + to_string(t2 - t1) + "\n";
-		cout << messg;
+	  string messg = allFiles[i].substr(allFiles[i].rfind('\\') + 1) +
+	    " done! Time: " + to_string(t2 - t1) + "\n";
+	  cout << messg;
 	}
 
 	return 0;
