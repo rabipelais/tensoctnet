@@ -113,7 +113,7 @@ class OctreeConvOp : public OpKernel {
 		calc_neigh_cpu(neigh, current_depth, 1);
 
 		// octree2col
-		const int octree_h = current_depth << 3 * (stride - 1); // = `div` 8
+		const int octree_h = current_depth << 3 * (stride - 1); // = * 8
 		const int kernel_size = kernel_tensor.dim_size(0) * kernel_tensor.dim_size(1) * kernel_tensor.dim_size(2); // only tested for 3 * 3 * 3, should probably check for this
 
 

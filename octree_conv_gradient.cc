@@ -123,6 +123,9 @@ class OctreeConvGradientOp : public OpKernel {
 						for (int y = 0; y < 3; ++y)
 							for (int z = 0; z < 3; ++z)
 								ni3[id++] = (x + i << 4) | (y + j << 2) | z + k;
+		// Voxels neighbours
+		std::vector<int> neigh((1 << 3 * current_depth) * 8);
+		calc_neigh_cpu(neigh, current_depth, 1);
 
 		//Propagate weights
 		// Calculate output shape. This is regarding the bottom data
@@ -160,13 +163,36 @@ class OctreeConvGradientOp : public OpKernel {
 		out_weight_eigen.noalias() = data_col_eigen.transpose() * top_diff_eigen;
 
 
+		//Propagate input diffs
+		//gemm the diffs and the weights(not the weight diffs)
+		auto kernel_flat = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>::Map(kernel_tensor.flat<float>().data(), kernel_in_depth * kernel_size, out_depth);
 
+		std::vector<float> diffs_col(kernel_in_depth * kernel_size * out_size);
+		auto out_diffs_eigen = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>::Map(diffs_col.data(), out_size, kernel_in_depth * kernel_size);
 
-		//-----------------------------------------------------------------------------------
+		out_diffs_eigen.noalias() = top_diff_eigen * kernel_flat.transpose();
 
-		// Voxels neighbours
-		std::vector<int> neigh((1 << 3 * current_depth) * 8);
-		calc_neigh_cpu(neigh, current_depth, 1);
+		//perform col2octree
+		std::vector<T> diffs_octree(kernel_in_depth * octree_h, 0.0);
+
+		for(int c = 0; c < kernel_in_depth; c++) {
+			for(int k = 0; k < kernel_size; k++) {
+				for(int h = 0; h < out_size; h++) {
+					const int index = stride == 2 ? (h << 6) + ni3[k] :
+						(h >> 3 << 6) + ni3[(h % 8) * kernel_size + k];
+					const int p = neigh[index];
+					if (p != -1) {
+						diffs_octree[c * octree_h + p] +=
+							diffs_col[(c * kernel_size + k) * out_size + h];
+					}
+				}
+			}
+		}
+
+		//Copy to output tensor (is there an easier way?)
+		for(int i = 0; i < output.size(); i++) {
+			output(i) = diffs_octree[i];
+		}
 	}
 };
 
