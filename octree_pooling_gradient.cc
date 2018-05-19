@@ -55,7 +55,7 @@ class OctreePoolingGradientOp : public OpKernel {
 		auto current_depth = current_depth_tensor.flat<int64>()(0);
 
 		const Tensor& original_data_tensor = context->input(6);
-		auto original_data = current_depth_tensor.flat<T>();
+		auto original_data = original_data_tensor.flat<T>();
 
 		OP_REQUIRES(context, input_tensor.dim_size(1) == node_num_data(current_depth) * 3,
 					errors::InvalidArgument(
