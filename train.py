@@ -1,21 +1,13 @@
 from pyevtk.hl import pointsToVTK, imageToVTK
 import tensorflow as tf
 import numpy as np
-import math
 import struct
 import os
 import sys
 from functools import partial
 
-# Own ops
-octree_conv_module = tf.load_op_library('./octree_conv.so')
-octree_conv = octree_conv_module.octree_conv
+from tensoctnet import octree_conv, octree_full_layer, octree_pooling
 
-octree_pooling_module = tf.load_op_library('./octree_pooling.so')
-octree_pooling = octree_pooling_module.octree_pooling
-
-octree_full_layer_module = tf.load_op_library('./octree_full_layer.so')
-octree_full_layer = octree_full_layer_module.octree_full_layer
 
 def to_point(depth, key):
     key = np.asscalar(np.uint32(key))
@@ -24,10 +16,12 @@ def to_point(depth, key):
     [x, y, z, _] = struct.unpack('B'*len(k), k)
     return [x, y, z]
 
+
 def weight_variable(shape):
     """weight_variable generates a weight variable of a given shape."""
     initial = tf.truncated_normal(shape, stddev=0.1)
     return tf.Variable(initial, dtype=tf.float32)
+
 
 def parse_function(cats, record):
     features = {
@@ -139,7 +133,7 @@ def train(dir_name):
     children_data = next_element['children_data']
     children_data_shape = tf.shape(children_data)
 
-    ## CONV OP
+    # CONV OP
     W = weight_variable([3, 3, 3, 1, 3])
     result = octree_conv(data, W, final_nodes, key_data, children_data, node_num_data, depth, [1])
 
@@ -152,13 +146,13 @@ def train(dir_name):
     concated = tf.concat([total_nodes, final_nodes, depth,
                           node_num_data, node_num_accu], 0)
 
-    #concated.eval()
+    # concated.eval()
     print("Evaluating")
 
     tf.global_variables_initializer().run()
     writer = tf.summary.FileWriter("tf_logs", sess.graph)
 
-    #depth_, final_keys_, _ = sess.run([depth, final_keys, concated])
+    # depth_, final_keys_, _ = sess.run([depth, final_keys, concated])
     res, r, s, d, c, _ = sess.run([result_shape, final_keys_shape, key_data_shape, data_shape, children_data_shape, concated])
     print("result shape: %s" % res)
     print("final_keys: %s" % r)

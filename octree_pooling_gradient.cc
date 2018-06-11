@@ -3,7 +3,7 @@
 using namespace tensorflow;
 
 REGISTER_OP("OctreePoolingGradient")
-    .Input("input: T")
+    .Input("grad_input: T")
     .Input("final_nodes: int64")
     .Input("key_data: int64")
     .Input("children_data: int64")
