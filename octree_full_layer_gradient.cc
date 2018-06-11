@@ -72,7 +72,7 @@ class OctreeFullLayerGradientOp : public OpKernel {
 		//Create the full voxel layer
 		TensorShape output_shape;
 		output_shape.AddDim(input_tensor.dim_size(0));
-		output_shape.AddDim(botton_h);
+		output_shape.AddDim(bottom_h);
 		output_shape.AddDim(in_depth);
 
 		Tensor* output_tensor = NULL;

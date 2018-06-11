@@ -1,13 +1,12 @@
 #include "tensorflow/core/framework/op_kernel.h"
-#include <vector>
-#include <unordered_map>
 
 using namespace tensorflow;
 
 void calc_neigh_cpu(std::vector<int> &neigh, const int depth, const int batch_size);
 
-REGISTER_OP("OctreeConv")
-    .Input("input: T")
+//Here "input" is the error gradients from above
+REGISTER_OP("OctreeConvGradient")
+    .Input("topdiff: T")
     .Input("kernel: T")
     .Input("final_nodes: int64")
     .Input("key_data: int64")
@@ -15,46 +14,48 @@ REGISTER_OP("OctreeConv")
     .Input("node_num_data: int64")
     .Input("current_depth: int64")
     .Input("strides: int64")
-    .Output("output: T")
+    .Input("original_data: T")
+    .Output("x_gradients: T")
+    .Output("weight_gradients: T")
     .Attr("T: {float} = DT_FLOAT");
 
 template <typename T>
-class OctreeConvOp : public OpKernel {
+class OctreeConvGradientOp : public OpKernel {
  public:
-	explicit OctreeConvOp(OpKernelConstruction* context) : OpKernel(context) {}
+	explicit OctreeConvGradientOp(OpKernelConstruction* context) : OpKernel(context) {}
 
 	void Compute(OpKernelContext* context) override {
 		//Grab the input tensors
 
 		// This should have the following dimensions?
 		// [ batch, data_dim, in_depth ]
-		const Tensor& input_tensor = context->input(0);
-		auto input = input_tensor.flat<T>();
+		const Tensor& topdiff_tensor = context->input(0);
+		auto topdiff = topdiff_tensor.flat<T>();
 
 		// Input filter is of the following dimensions:
 		// [ filter_x, filter_y, filter_z, in_depth, out_depth]
 		const Tensor& kernel_tensor = context->input(1);
 		auto kernel = kernel_tensor.flat<T>();
 
-		OP_REQUIRES(context, input_tensor.dims() == 3,
-					errors::InvalidArgument("input must be 3-dimensional",
-										   input_tensor.shape().DebugString()));
+		OP_REQUIRES(context, topdiff_tensor.dims() == 3,
+					errors::InvalidArgument("topdiff must be 3-dimensional",
+										   topdiff_tensor.shape().DebugString()));
 		OP_REQUIRES(context, kernel_tensor.dims() == 5,
 					errors::InvalidArgument("kernel must be 5-dimensional: ",
 										   kernel_tensor.shape().DebugString()));
 
-		// The last dimension for input is in_depth. It must be the same as the
-		// filter's in_depth.
-		const int64 in_depth = input_tensor.dim_size(2);
-
-		OP_REQUIRES(context, in_depth == kernel_tensor.dim_size(3),
-					errors::InvalidArgument(
-						"input and kernel must have the same depth: ", in_depth,
-						" vs ", kernel_tensor.dim_size(3)));
+		// The last dimension for topdiff is in_depth. It must be the same as the
+		// filter's out_depth.
+		const int64 topdiff_in_depth = topdiff_tensor.dim_size(2);
 
 		// The last dimension for filter is out_depth.
-		const int out_depth = static_cast<int>(kernel_tensor.dim_size(3));
+		const int out_depth = static_cast<int>(kernel_tensor.dim_size(4));
+		const int kernel_in_depth = static_cast<int>(kernel_tensor.dim_size(3));
 
+		OP_REQUIRES(context, topdiff_in_depth == out_depth,
+					errors::InvalidArgument(
+						"topdiff and kernel(out) must have the same depth: ", topdiff_in_depth,
+						" vs ", out_depth));
 
 		const Tensor& final_nodes_tensor = context->input(2);
 		auto final_nodes = final_nodes_tensor.flat<int64>()(0);
@@ -71,10 +72,10 @@ class OctreeConvOp : public OpKernel {
 		const Tensor& current_depth_tensor = context->input(6);
 		auto current_depth = current_depth_tensor.flat<int64>()(0);
 
-		OP_REQUIRES(context, input_tensor.dim_size(1) == node_num_data(current_depth) * 3,
+		OP_REQUIRES(context, topdiff_tensor.dim_size(1) == node_num_data(current_depth - 1) * 3,
 					errors::InvalidArgument(
-						"input data must have node_num_data[current_depth] * 3 entries: ", input_tensor.dim_size(1),
-						" vs ", node_num_data(current_depth) * 3));
+						"input data must have node_num_data[current_depth - 1] * 3 entries: ", topdiff_tensor.dim_size(1),
+						" vs ", node_num_data(current_depth - 1) * 3));
 
 		const Tensor& strides_ = context->input(7);
 		auto stride = strides_.flat<int64>()(0);
@@ -84,18 +85,33 @@ class OctreeConvOp : public OpKernel {
 		OP_REQUIRES(context, stride == 1 || stride == 2,
 					errors::InvalidArgument("Stride must currently be only 1 or 2: ", stride));
 
-		// Calculate output shape
-		auto out_size = stride == 1? input_tensor.dim_size(1) : node_num_data(current_depth - 1) * 3; //TODO check for root
+		//Original bottom data
+		const Tensor& original_data_tensor = context->input(8);
+		auto original_data = original_data_tensor.flat<T>();
 
 		TensorShape output_shape;
-		output_shape.AddDim(input_tensor.dim_size(0));
-		output_shape.AddDim(out_size);
-		output_shape.AddDim(out_depth);
+		output_shape.AddDim(topdiff_tensor.dim_size(0));
+		output_shape.AddDim(original_data_tensor.dim_size(1));
+		output_shape.AddDim(kernel_in_depth);
 
 		Tensor* output_tensor = NULL;
 		OP_REQUIRES_OK(context, context->allocate_output(0, output_shape,
                                                      &output_tensor));
 		auto output = output_tensor->flat<T>();
+
+		//Output weight gradients
+		TensorShape out_weight_shape;
+		out_weight_shape.AddDim(kernel_tensor.dim_size(0));
+		out_weight_shape.AddDim(kernel_tensor.dim_size(1));
+		out_weight_shape.AddDim(kernel_tensor.dim_size(2));
+		out_weight_shape.AddDim(kernel_tensor.dim_size(3));
+		out_weight_shape.AddDim(kernel_tensor.dim_size(4));
+
+		Tensor* out_weight_tensor = NULL;
+		OP_REQUIRES_OK(context, context->allocate_output(1, out_weight_shape,
+                                                     &out_weight_tensor));
+		auto out_weight = out_weight_tensor->flat<T>();
+
 
 		// Precalculate some neighbourhood info for 3-kernels
 		int ni3[216];
@@ -107,19 +123,22 @@ class OctreeConvOp : public OpKernel {
 						for (int y = 0; y < 3; ++y)
 							for (int z = 0; z < 3; ++z)
 								ni3[id++] = (x + i << 4) | (y + j << 2) | z + k;
-
 		// Voxels neighbours
 		std::vector<int> neigh((1 << 3 * current_depth) * 8);
 		calc_neigh_cpu(neigh, current_depth, 1);
 
-		// octree2col
-		const int octree_h = current_depth << 3 * (stride - 1); // = * 8
+		//Propagate weights
+		// Calculate output shape. This is regarding the bottom data
+		auto out_size = stride == 1? original_data_tensor.dim_size(1) : node_num_data(current_depth - 1) * 3; //TODO check for root
+		//First oct2col for bottom weights (inputs of the layer, not the gradient func)
+		const int octree_h = current_depth << 3 * (stride - 1); // = `div` 8
 		const int kernel_size = kernel_tensor.dim_size(0) * kernel_tensor.dim_size(1) * kernel_tensor.dim_size(2); // only tested for 3 * 3 * 3, should probably check for this
 
 
-		std::vector<float> data_col(in_depth * kernel_size * out_size);
+		std::vector<float> data_col(kernel_in_depth * kernel_size * out_size);
 
-		for(int c = 0; c < in_depth; ++c) {
+		// octree2col
+		for(int c = 0; c < kernel_in_depth; ++c) {
 			for(int k = 0; k < kernel_size; ++k) {
 				for(int h = 0; h < out_size; ++h) {
 
@@ -129,18 +148,51 @@ class OctreeConvOp : public OpKernel {
 					const int p = neigh[index];
 
 					data_col[(c*kernel_size + k)*out_size + h] = p == -1 ?
-						0 : input(c*octree_h + p);
+						0 : original_data(c*octree_h + p);
 				}
 			}
 		}
 
-		auto data_col_eigen = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>::Map(data_col.data(), out_size, in_depth * kernel_size);
+		//gemm for the weights
+		auto data_col_eigen = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>::Map(data_col.data(), out_size, kernel_in_depth * kernel_size);
 
-		auto kernel_flat = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>::Map(kernel_tensor.flat<float>().data(), in_depth * kernel_size, out_depth);
+		auto top_diff_eigen = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>::Map(topdiff.data(), out_size, out_depth);
 
-		auto out_eigen = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>::Map(output.data(), out_size, out_depth);
+		auto out_weight_eigen = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>::Map(out_weight.data(), kernel_in_depth * kernel_size, out_depth);
 
-		out_eigen.noalias() = data_col_eigen * kernel_flat;
+		out_weight_eigen.noalias() = data_col_eigen.transpose() * top_diff_eigen;
+
+
+		//Propagate input diffs
+		//gemm the diffs and the weights(not the weight diffs)
+		auto kernel_flat = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>::Map(kernel_tensor.flat<float>().data(), kernel_in_depth * kernel_size, out_depth);
+
+		std::vector<float> diffs_col(kernel_in_depth * kernel_size * out_size);
+		auto out_diffs_eigen = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>::Map(diffs_col.data(), out_size, kernel_in_depth * kernel_size);
+
+		out_diffs_eigen.noalias() = top_diff_eigen * kernel_flat.transpose();
+
+		//perform col2octree
+		std::vector<T> diffs_octree(kernel_in_depth * octree_h, 0.0);
+
+		for(int c = 0; c < kernel_in_depth; c++) {
+			for(int k = 0; k < kernel_size; k++) {
+				for(int h = 0; h < out_size; h++) {
+					const int index = stride == 2 ? (h << 6) + ni3[k] :
+						(h >> 3 << 6) + ni3[(h % 8) * kernel_size + k];
+					const int p = neigh[index];
+					if (p != -1) {
+						diffs_octree[c * octree_h + p] +=
+							diffs_col[(c * kernel_size + k) * out_size + h];
+					}
+				}
+			}
+		}
+
+		//Copy to output tensor (is there an easier way?)
+		for(int i = 0; i < output.size(); i++) {
+			output(i) = diffs_octree[i];
+		}
 	}
 };
 
@@ -248,7 +300,7 @@ void calc_neigh_cpu(std::vector<int> &neigh, const int depth, const int batch_si
 
 
 REGISTER_KERNEL_BUILDER(
-    Name("OctreeConv")
+    Name("OctreeConvGradient")
     .Device(DEVICE_CPU)
     .TypeConstraint<float>("T"),
-    OctreeConvOp<float>);
+    OctreeConvGradientOp<float>);
