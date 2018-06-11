@@ -118,7 +118,7 @@ int main(int argc, char* argv[])
 	int depth = args.depth;
 	int full_layer = args.fullLayers;
 	float dis = args.displacement;
-	int view_num = 24; //TODO make arg?
+	int view_num = 12; //TODO make arg?
 	bool segmentation = args.segmentation;
 
 	for (int i = 0; i < allFiles.size(); i++)
@@ -187,13 +187,17 @@ int main(int argc, char* argv[])
 			swap(C, normal);
 
 			// save
+
+			// message
 			char file_suffix[128];
 			sprintf(file_suffix, "_%d_%d_%03d.octree", depth, full_layer, v);
 			string filename = allFiles[i].substr(0, allFiles[i].rfind('.')) + file_suffix;
-			octree.save(filename);
-
-			// message
-			cout << "Processing: " << filename.substr(filename.rfind('\\') + 1) << std::endl;
+			cout << "Processed: " << filename.substr(filename.rfind('\\') + 1) << std::endl;
+			if(octree.save(filename)) {
+			  cout << "-- saved to: " << filename << std::endl;
+			} else {
+			  cout << "-- error saving file: " << filename << std::endl;
+			}
 		}
 	}
 

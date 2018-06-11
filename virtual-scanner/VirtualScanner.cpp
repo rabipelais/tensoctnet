@@ -288,7 +288,8 @@ void remove_zero_faces(MatrixXF& V, MatrixXi& F)
 }
 
 bool VirtualScanner::scanning(string filename, int view_num, bool flags)
-{
+{	
+  
 	if (view_num < 1) view_num = 1;
 	if (view_num > total_view_num_) view_num = total_view_num_;
 

@@ -1,6 +1,7 @@
 /virtual-scanner/mn10.zip
 /virtual-scanner/virtual-scanner
 /octree/Octree.vcxproj
+/octree/octree
 *.filters
 *.octree
 *.points
