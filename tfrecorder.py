@@ -20,13 +20,14 @@ def read_data(dir):
             if ext != '.octree':
                 continue
 
-            print(name)
-
             components = basename.split('_')
             train_p = components[0]
-            label_name = "-".join(components[1:-4])
+            label_name = components[1]
+            sub_label = components[2]
 
-            data = read_file(os.path.join(dirpath, name))
+            data = read_file(os.path.join(dirpath, name), label_name, sub_label)
+
+            print("Reading file %s, with label %s and sub %s" % name, label_name, sub_label)
 
             label_idx = -1
             if label_name in labels_dict:
@@ -49,7 +50,7 @@ def read_data(dir):
         return train, test, labels_dict
 
 
-def read_file(filename):
+def read_file(filename, label_name, sub_label):
     with open(filename, "rb") as binary_file:
         intsize = 4
         floatsize = 4
@@ -90,7 +91,7 @@ def read_file(filename):
             key_data_bytes = binary_file.read(intsize)
             key_data[i] = int.from_bytes(
                 key_data_bytes, byteorder=endian)
-        print(key_data)
+        # print(key_data)
 
         children_data = np.empty(total_nodes, dtype=int)
         for i in range(total_nodes):
@@ -123,7 +124,9 @@ def read_file(filename):
                'key_data': key_data,
                'children_data': children_data,
                'data': data_data,
-               'label_data': label_data}
+               'label_data': label_data,
+               'label_name': label_name,
+               'sub_label_name': sub_label}
         return res
 
 
